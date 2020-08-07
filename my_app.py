@@ -9,6 +9,7 @@ import logging
 from werkzeug import secure_filename
 from keras.preprocessing.image import ImageDataGenerator, load_img, img_to_array
 from keras.models import Sequential, load_model
+# from flatten_json import flatten 
 import numpy as np
 import argparse
 import imutils
@@ -47,6 +48,33 @@ def predict(file):
     answer = np.argmax(result)
     return answer
 
+def flatten_json(y): 
+    out = {} 
+  
+    def flatten(x, name =''): 
+          
+        # If the Nested key-value  
+        # pair is of dict type 
+        if type(x) is dict: 
+              
+            for a in x: 
+                flatten(x[a], name + a + '_') 
+                  
+        # If the Nested key-value 
+        # pair is of list type 
+        elif type(x) is list: 
+              
+            i = 0
+              
+            for a in x:                 
+                flatten(a, name + str(i) + '_') 
+                i += 1
+        else: 
+            out[name[:-1]] = x 
+  
+    flatten(y) 
+    return out 
+
 def my_random_string(string_length=10):
     """Returns a random string of length string_length."""
     random = str(uuid.uuid4()) # Convert UUID format to a Python string.
@@ -66,7 +94,6 @@ FlaskJSON(app)
 
 # route for upload image
 @app.route('/upload', methods=['POST'])
-@as_json
 def fileUpload():
     # get file
     file = request.files['file']
@@ -93,7 +120,10 @@ def fileUpload():
         filename = my_random_string(6) + filename
         os.rename(file_path, os.path.join(app.config['UPLOAD_FOLDER'], filename))
         print(filename)
-        return dict({'ob':json_data, 'dest':filename})
+        my_dict = dict({'ob': json_data, 'dest':filename})
+        merged_dict = flatten_json(my_dict)
+        print(merged_dict)
+        return merged_dict
 
 
 from flask import send_from_directory
