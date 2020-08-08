@@ -9,6 +9,7 @@ import logging
 from werkzeug import secure_filename
 from keras.preprocessing.image import ImageDataGenerator, load_img, img_to_array
 from keras.models import Sequential, load_model
+# from flatten_json import flatten 
 import numpy as np
 import argparse
 import imutils
