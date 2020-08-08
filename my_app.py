@@ -19,7 +19,6 @@ import base64
 import requests
 
 
-
 logging.basicConfig(level=logging.INFO)
 
 logger = logging.getLogger('HELLO WORLD')
@@ -33,9 +32,10 @@ model = load_model(model_path)
 UPLOAD_FOLDER = 'uploads'
 ALLOWED_EXTENSIONS = set(['jpg', 'jpeg'])
 
-
-def get_as_base64(url):
-    return base64.b64encode(requests.get(url).content)
+ 
+def get_base64_encoded_image(image_path):
+    with open(image_path, "rb") as img_file:
+        return base64.b64encode(img_file.read()).decode('utf-8')
 
 def predict(file):
     x = load_img(file, target_size=(img_width,img_height))
@@ -47,12 +47,27 @@ def predict(file):
     answer = np.argmax(result)
     return answer
 
-def my_random_string(string_length=10):
-    """Returns a random string of length string_length."""
-    random = str(uuid.uuid4()) # Convert UUID format to a Python string.
-    random = random.upper() # Make all characters uppercase.
-    random = random.replace("-","") # Remove the UUID '-'.
-    return random[0:string_length] # Return the random string.
+def flatten_json(y): 
+    out = {} 
+  
+    def flatten(x, name =''): 
+        # If the Nested key-value  
+        # pair is of dict type 
+        if type(x) is dict:   
+            for a in x: 
+                flatten(x[a], name + a + '_') 
+                  
+        # If the Nested key-value 
+        # pair is of list type 
+        elif type(x) is list: 
+            i = 0
+            for a in x:                 
+                flatten(a, name + str(i) + '_') 
+                i += 1
+        else: 
+            out[name[:-1]] = x 
+    flatten(y) 
+    return out 
 
 def allowed_file(filename):
     return '.' in filename and \
@@ -66,7 +81,6 @@ FlaskJSON(app)
 
 # route for upload image
 @app.route('/upload', methods=['POST'])
-@as_json
 def fileUpload():
     # get file
     file = request.files['file']
@@ -77,39 +91,27 @@ def fileUpload():
         file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         file.save(file_path)
 
+        # encode image with base64
+        base64_img = get_base64_encoded_image(file_path)
+
         # make prediction about image
         result = predict(file_path)
+
+        # remove the saved img
+        os.remove(file_path)
         
         # send http request to know more about the label
         payload = str(result)
         url = 'http://localhost:3002/api/landmarks/' + payload
         response = requests.get(url)
-        print(response.url)
         json_data = response.json()
-        print(json_data)
+        
 
-        # rename the file for security
-        print(file_path)
-        filename = my_random_string(6) + filename
-        os.rename(file_path, os.path.join(app.config['UPLOAD_FOLDER'], filename))
-        print(filename)
-        return dict({'ob':json_data, 'dest':filename})
-
-
-from flask import send_from_directory
-
-# route for getting the uploaded image saved on the server
-@app.route('/uploads/<filename>')
-def uploaded_file(filename):
-    return send_from_directory(app.config['UPLOAD_FOLDER'],
-                               filename)
-
-from werkzeug import SharedDataMiddleware
-app.add_url_rule('/uploads/<filename>', 'uploaded_file',
-                 build_only=True)
-app.wsgi_app = SharedDataMiddleware(app.wsgi_app, {
-    '/uploads':  app.config['UPLOAD_FOLDER']
-})
+        # create json with data about image and the encoded img
+        my_dict = dict({'ob': json_data, "to_dec": base64_img})
+        merged_dict = flatten_json(my_dict)
+        
+        return merged_dict
 
 
 if __name__ == "__main__":
